@@ -15,6 +15,13 @@ urlpatterns = [
     # API Authentication
     path('api/auth/', include('apps.users.urls')),
     
+    # API Endpoints
+    path('api/patients/', include('apps.patients.urls')),
+    path('api/providers/', include('apps.providers.urls')),
+    path('api/checkins/', include('apps.checkins.urls')),
+    path('api/alerts/', include('apps.alerts.urls')),
+    path('api/messages/', include('apps.messaging.urls')),
+    
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
