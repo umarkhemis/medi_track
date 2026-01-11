@@ -1,0 +1,91 @@
+import React from 'react';
+import useAuth from '../../hooks/useAuth';
+import { Activity, Users, AlertTriangle, CheckCircle } from 'lucide-react';
+
+const DashboardPage = () => {
+  const { user } = useAuth();
+
+  const stats = [
+    {
+      title: 'Total Patients',
+      value: '48',
+      change: '+2 from last week',
+      icon: Users,
+      color: 'bg-blue-500',
+    },
+    {
+      title: 'High Risk',
+      value: '5',
+      change: '2 new alerts',
+      icon: AlertTriangle,
+      color: 'bg-red-500',
+    },
+    {
+      title: 'Moderate Risk',
+      value: '12',
+      change: 'Stable',
+      icon: Activity,
+      color: 'bg-yellow-500',
+    },
+    {
+      title: 'Low Risk',
+      value: '31',
+      change: 'All good',
+      icon: CheckCircle,
+      color: 'bg-green-500',
+    },
+  ];
+
+  return (
+    <div className="min-h-screen bg-gray-100">
+      {/* Header */}
+      <header className="bg-white shadow">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-gray-900">
+            Welcome, Dr. {user?.first_name || 'Provider'}
+          </h1>
+          <button
+            className="bg-primary-600 text-white px-4 py-2 rounded-md hover:bg-primary-700"
+          >
+            View All Patients
+          </button>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          {stats.map((stat, index) => (
+            <div key={index} className="bg-white rounded-lg shadow p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-medium text-gray-600">{stat.title}</h3>
+                <div className={`${stat.color} p-2 rounded-lg`}>
+                  <stat.icon className="w-5 h-5 text-white" />
+                </div>
+              </div>
+              <div className="text-3xl font-bold text-gray-900 mb-1">{stat.value}</div>
+              <p className="text-sm text-gray-500">{stat.change}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Recent Activity */}
+        <div className="bg-white rounded-lg shadow">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">Recent Activity</h2>
+          </div>
+          <div className="p-6">
+            <div className="text-center text-gray-500 py-8">
+              <Activity className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+              <p>No recent activity to display</p>
+              <p className="text-sm mt-2">Patient check-ins and alerts will appear here</p>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+};
+
+export default DashboardPage;
