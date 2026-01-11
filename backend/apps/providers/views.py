@@ -82,7 +82,8 @@ class ProviderViewSet(viewsets.ModelViewSet):
             'pending_followups': pending_followups,
         }
         
-        serializer = ProviderDashboardSerializer(data)
+        serializer = ProviderDashboardSerializer(data=data)
+        serializer.is_valid()
         return Response(serializer.data)
     
     @action(detail=True, methods=['put'])

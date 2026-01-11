@@ -71,9 +71,11 @@ class TwilioWebhookView(APIView):
         
         # Find patient by phone number
         try:
-            user = Patient.objects.get(user__phone_number=from_number)
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            user = User.objects.get(phone_number=from_number)
             patient = user.patient_profile
-        except Patient.DoesNotExist:
+        except (User.DoesNotExist, AttributeError):
             return Response({'status': 'unknown_sender'})
         
         # Create message record
