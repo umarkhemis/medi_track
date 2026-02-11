@@ -66,3 +66,25 @@ yarn.lock
 # Misc
 *.bak
 *.tmp
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Database
+*.sqlite3
+db.sqlite3
+
+# Environment
+.env
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
