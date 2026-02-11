@@ -54,5 +54,7 @@ class Patient(models.Model):
     @property
     def days_since_discharge(self):
         """Calculate days since discharge."""
+        if self.discharge_date is None:
+            return None
         from datetime import date
         return (date.today() - self.discharge_date).days
