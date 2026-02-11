@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from .models import MessageTemplate, Message
 from .serializers import MessageTemplateSerializer, MessageSerializer
+from .services.twilio_service import TwilioService
 
 
 class MessageTemplateViewSet(viewsets.ModelViewSet):
@@ -32,7 +33,8 @@ class MessageViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'])
     def send(self, request):
         """Send a message to a patient."""
-        # TODO: Integrate with TwilioService
+        from apps.patients.models import Patient
+        
         patient_id = request.data.get('patient_id')
         content = request.data.get('content')
         channel = request.data.get('channel', 'sms')
@@ -43,18 +45,40 @@ class MessageViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        try:
+            patient = Patient.objects.select_related('user').get(id=patient_id)
+        except Patient.DoesNotExist:
+            return Response(
+                {'error': 'Patient not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Send via Twilio
+        twilio_service = TwilioService()
+        result = twilio_service.send_message(
+            patient.user.phone_number,
+            content,
+            channel=channel
+        )
+        
         # Create message record
         message = Message.objects.create(
-            patient_id=patient_id,
+            patient=patient,
             provider=request.user.provider_profile if hasattr(request.user, 'provider_profile') else None,
             channel=channel,
             direction='outbound',
             content=content,
-            status='pending'
+            status='sent' if result.get('success') else 'failed',
+            twilio_sid=result.get('sid', ''),
+            sent_at=timezone.now() if result.get('success') else None,
+            is_automated=False
         )
         
         serializer = self.get_serializer(message)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        response_data = serializer.data
+        response_data['twilio_result'] = result
+        
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
 
 class TwilioWebhookView(APIView):
@@ -64,6 +88,8 @@ class TwilioWebhookView(APIView):
     
     def post(self, request):
         from apps.patients.models import Patient
+        from apps.checkins.models import DailyCheckIn, CheckInResponse
+        from apps.checkins.services.risk_assessment import RiskAssessmentService
         
         from_number = request.data.get('From', '').replace('whatsapp:', '')
         body = request.data.get('Body', '').strip()
@@ -89,6 +115,41 @@ class TwilioWebhookView(APIView):
             delivered_at=timezone.now()
         )
         
-        # TODO: Process patient response for check-ins
+        # Process patient response for check-ins
+        checkin = DailyCheckIn.objects.filter(
+            patient=patient,
+            scheduled_date=timezone.now().date(),
+            status__in=['sent', 'in_progress']
+        ).first()
         
-        return Response({'status': 'received'})
+        if checkin:
+            # Update check-in status
+            checkin.status = 'in_progress'
+            checkin.save()
+            
+            # Parse response - expecting numbers separated by spaces
+            # Example: "3 5 7" for three questions
+            responses = body.split()
+            risk_service = RiskAssessmentService()
+            
+            # Try to create responses for each answer
+            for idx, response_text in enumerate(responses):
+                question_key = f'question_{idx + 1}'
+                parsed_value, score = risk_service.parse_response_value(
+                    response_text,
+                    question_key
+                )
+                
+                CheckInResponse.objects.create(
+                    checkin=checkin,
+                    question_key=question_key,
+                    question_text=f'Question {idx + 1}',
+                    response_value=parsed_value,
+                    response_score=score
+                )
+            
+            # If we have enough responses, process the check-in
+            if checkin.responses.count() >= 1:
+                risk_service.process_checkin(checkin)
+        
+        return Response({'status': 'received', 'processed': checkin is not None})
