@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAuth } from '../../context/AuthContext';
+import Layout from '../../components/layout/Layout';
 import { Activity, Users, AlertTriangle, CheckCircle } from 'lucide-react';
 
 const DashboardPage = () => {
@@ -37,25 +38,18 @@ const DashboardPage = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Header */}
-      <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+    <Layout>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="bg-white rounded-lg shadow p-6">
           <h1 className="text-2xl font-bold text-gray-900">
-            Welcome, Dr. {user?.first_name || 'Provider'}
+            Welcome back, Dr. {user?.first_name || user?.username || 'Provider'}!
           </h1>
-          <button
-            className="bg-primary-600 text-white px-4 py-2 rounded-md hover:bg-primary-700"
-          >
-            View All Patients
-          </button>
+          <p className="text-gray-600 mt-1">Here's your patient monitoring overview</p>
         </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {stats.map((stat, index) => (
             <div key={index} className="bg-white rounded-lg shadow p-6">
               <div className="flex items-center justify-between mb-4">
@@ -83,8 +77,8 @@ const DashboardPage = () => {
             </div>
           </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </Layout>
   );
 };
 

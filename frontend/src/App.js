@@ -6,7 +6,12 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 
 // Pages
 import LoginPage from './pages/auth/LoginPage';
+import RegisterPage from './pages/auth/RegisterPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
+import PatientsPage from './pages/patients/PatientsPage';
+import AlertsPage from './pages/alerts/AlertsPage';
+import MessagesPage from './pages/messages/MessagesPage';
+import SettingsPage from './pages/settings/SettingsPage';
 
 // Create a client
 const queryClient = new QueryClient();
@@ -34,11 +39,44 @@ function App() {
           <Toaster position="top-right" />
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
             <Route
               path="/dashboard"
               element={
                 <ProtectedRoute>
                   <DashboardPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/patients"
+              element={
+                <ProtectedRoute>
+                  <PatientsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/alerts"
+              element={
+                <ProtectedRoute>
+                  <AlertsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/messages"
+              element={
+                <ProtectedRoute>
+                  <MessagesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute>
+                  <SettingsPage />
                 </ProtectedRoute>
               }
             />
