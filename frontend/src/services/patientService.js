@@ -1,6 +1,12 @@
 import api from './api';
 
-export const patientService = {
+const patientService = {
+  // Alias for getAll
+  getPatients: async (params = {}) => {
+    const response = await api.get('/patients/', { params });
+    return response.data;
+  },
+
   getAll: async (params = {}) => {
     const response = await api.get('/patients/', { params });
     return response.data;
@@ -51,3 +57,6 @@ export const patientService = {
     return response.data;
   },
 };
+
+export { patientService };
+export default patientService;
