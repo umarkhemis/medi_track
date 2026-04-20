@@ -21,5 +21,5 @@ class MessageSerializer(serializers.ModelSerializer):
         model = Message
         fields = '__all__'
         read_only_fields = (
-            'created_at', 'sent_at', 'delivered_at', 'read_at', 'twilio_sid'
+            'created_at', 'sent_at', 'delivered_at', 'read_at', 'message_sid'
         )
