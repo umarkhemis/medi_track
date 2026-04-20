@@ -44,8 +44,8 @@ class AfricasTalkingService:
             dict: Result with success status, message ID, and status
         """
         if not self._sms:
-            # Mock mode — log and return success so development workflow still works
-            print(f"[AT MOCK] SMS to {to_number}: {message[:60]}...")
+            # Mock mode — log without exposing phone number
+            print(f"[AT MOCK] SMS to recipient: {message[:60]}...")
             return {
                 'success': True,
                 'mock': True,
@@ -69,8 +69,8 @@ class AfricasTalkingService:
 
             if recipients:
                 recipient = recipients[0]
+                # Africa's Talking uses status code 101 to indicate successful submission
                 status_code = recipient.get('statusCode', 0)
-                # AT status code 101 = Success
                 success = status_code == 101
                 return {
                     'success': success,

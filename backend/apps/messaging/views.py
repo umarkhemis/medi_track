@@ -214,13 +214,21 @@ class AfricasTalkingWebhookView(APIView):
                 },
             )
 
-        # Determine how many responses are expected
-        expected_count = len(question_keys) if question_keys else len(tokens)
-        received_count = checkin.responses.count()
-
-        # Process check-in once all expected responses are in
-        if received_count >= expected_count and expected_count > 0:
-            risk_service.process_checkin(checkin)
+        # Determine how many responses are expected.
+        # Prefer the stored question_keys length; if not set we cannot reliably
+        # know the expected count so we skip auto-processing until a template-driven
+        # check-in has been sent that populates question_keys.
+        if not question_keys:
+            # No question_keys stored — this check-in was not created via the
+            # scheduler or predates the feature; process once any responses arrive
+            # but only if the patient submitted at least one token.
+            if tokens:
+                risk_service.process_checkin(checkin)
+        else:
+            received_count = checkin.responses.count()
+            expected_count = len(question_keys)
+            if received_count >= expected_count:
+                risk_service.process_checkin(checkin)
 
         return Response({'status': 'received', 'processed': True})
 

@@ -1,4 +1,7 @@
 """Services for messaging app."""
-from .twilio_service import TwilioService
+from .at_service import AfricasTalkingService
 
-__all__ = ['TwilioService']
+# Keep TwilioService name for any legacy code that imports from this package
+TwilioService = AfricasTalkingService
+
+__all__ = ['AfricasTalkingService', 'TwilioService']

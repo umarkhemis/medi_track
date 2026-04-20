@@ -113,17 +113,21 @@ class CheckInScheduler:
         """
         patient = checkin.patient
 
-        # Find the most specific active template (condition-match beats 'all')
+        # Find the most specific active template.
+        # Prefer exact condition match over 'all'; break ties by newest first.
+        from django.db.models import Case, When, Value, IntegerField as _IntField
         template = MessageTemplate.objects.filter(
             template_type='daily_checkin',
             is_active=True,
         ).filter(
             Q(condition=patient.condition) | Q(condition='all')
-        ).order_by(
-            # Prefer exact condition match: non-'all' strings are non-empty so sort DESC
-            '-condition',
-            '-created_at',
-        ).first()
+        ).annotate(
+            condition_priority=Case(
+                When(condition=patient.condition, then=Value(1)),
+                default=Value(0),
+                output_field=_IntField(),
+            )
+        ).order_by('-condition_priority', '-created_at').first()
 
         if not template:
             return {'success': False, 'error': 'No active check-in template found'}
