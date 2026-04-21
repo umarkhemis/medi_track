@@ -9,6 +9,7 @@ import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import PatientsPage from './pages/patients/PatientsPage';
+import PatientDetailPage from './pages/patients/PatientDetailPage';
 import AlertsPage from './pages/alerts/AlertsPage';
 import MessagesPage from './pages/messages/MessagesPage';
 import SettingsPage from './pages/settings/SettingsPage';
@@ -53,6 +54,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <PatientsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/patients/:id"
+              element={
+                <ProtectedRoute>
+                  <PatientDetailPage />
                 </ProtectedRoute>
               }
             />

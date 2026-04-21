@@ -46,7 +46,7 @@ class Patient(models.Model):
     
     class Meta:
         db_table = 'patients'
-        ordering = ['-current_risk_level', '-created_at']
+        ordering = ['-created_at']
     
     def __str__(self):
         return f"{self.user.get_full_name()} - {self.get_condition_display()}"

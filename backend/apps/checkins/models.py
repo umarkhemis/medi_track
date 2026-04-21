@@ -22,6 +22,14 @@ class DailyCheckIn(models.Model):
     risk_score = models.IntegerField(null=True, blank=True)  # 0-10 scale
     risk_level = models.CharField(max_length=10, null=True, blank=True)  # green/yellow/red
     notes = models.TextField(blank=True)
+    question_keys = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            'Ordered list of question keys expected for this check-in, '
+            'populated when the check-in message is sent.'
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:

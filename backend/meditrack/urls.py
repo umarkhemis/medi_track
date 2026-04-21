@@ -21,6 +21,7 @@ urlpatterns = [
     path('api/checkins/', include('apps.checkins.urls')),
     path('api/alerts/', include('apps.alerts.urls')),
     path('api/messages/', include('apps.messaging.urls')),
+    path('api/analytics/', include('apps.analytics.urls')),
     
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

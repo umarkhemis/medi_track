@@ -24,4 +24,4 @@ class MessageAdmin(admin.ModelAdmin):
     list_filter = ('channel', 'direction', 'status', 'is_automated', 'created_at')
     search_fields = ('patient__user__first_name', 'patient__user__last_name', 'content')
     ordering = ('-created_at',)
-    readonly_fields = ('created_at', 'sent_at', 'delivered_at', 'read_at', 'twilio_sid')
+    readonly_fields = ('created_at', 'sent_at', 'delivered_at', 'read_at', 'message_sid')

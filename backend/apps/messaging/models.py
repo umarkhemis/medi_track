@@ -70,7 +70,7 @@ class Message(models.Model):
     direction = models.CharField(max_length=20, choices=DIRECTION_CHOICES)
     content = models.TextField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-    twilio_sid = models.CharField(max_length=50, blank=True)  # Twilio message SID
+    message_sid = models.CharField(max_length=100, blank=True)  # Provider message ID (e.g. Africa's Talking)
     sent_at = models.DateTimeField(null=True, blank=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
     read_at = models.DateTimeField(null=True, blank=True)
