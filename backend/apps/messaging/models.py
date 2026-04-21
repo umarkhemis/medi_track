@@ -75,6 +75,14 @@ class Message(models.Model):
     delivered_at = models.DateTimeField(null=True, blank=True)
     read_at = models.DateTimeField(null=True, blank=True)
     is_automated = models.BooleanField(default=False)
+    follow_up_schedule = models.ForeignKey(
+        'FollowUpSchedule',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='sent_messages',
+    )
+    follow_up_trigger_at = models.DateTimeField(null=True, blank=True)
     related_checkin = models.ForeignKey(
         'checkins.DailyCheckIn',
         on_delete=models.SET_NULL,
@@ -89,3 +97,32 @@ class Message(models.Model):
     
     def __str__(self):
         return f"{self.get_direction_display()} {self.get_channel_display()} - {self.patient.user.get_full_name()}"
+
+
+class FollowUpSchedule(models.Model):
+    """Configurable follow-up interval after patient discharge."""
+
+    INTERVAL_UNIT_CHOICES = [
+        ('minutes', 'Minutes'),
+        ('hours', 'Hours'),
+        ('days', 'Days'),
+    ]
+
+    name = models.CharField(max_length=120, unique=True)
+    template = models.ForeignKey(
+        MessageTemplate,
+        on_delete=models.PROTECT,
+        related_name='follow_up_schedules',
+    )
+    interval_value = models.PositiveIntegerField()
+    interval_unit = models.CharField(max_length=10, choices=INTERVAL_UNIT_CHOICES, default='days')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'follow_up_schedules'
+        ordering = ['interval_value', 'name']
+
+    def __str__(self):
+        return f"{self.name} (+{self.interval_value} {self.interval_unit})"

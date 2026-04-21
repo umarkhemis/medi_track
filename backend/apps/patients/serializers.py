@@ -7,7 +7,11 @@ class PatientSerializer(serializers.ModelSerializer):
     
     user_email = serializers.EmailField(source='user.email', read_only=True)
     user_name = serializers.CharField(source='user.get_full_name', read_only=True)
-    provider_name = serializers.CharField(source='assigned_provider.user.get_full_name', read_only=True)
+    provider_name = serializers.CharField(
+        source='assigned_provider.user.get_full_name',
+        read_only=True,
+        allow_null=True,
+    )
     days_since_discharge = serializers.IntegerField(read_only=True)
     
     class Meta:
@@ -20,7 +24,11 @@ class PatientListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for patient lists."""
     
     user_name = serializers.CharField(source='user.get_full_name', read_only=True)
-    provider_name = serializers.CharField(source='assigned_provider.user.get_full_name', read_only=True)
+    provider_name = serializers.CharField(
+        source='assigned_provider.user.get_full_name',
+        read_only=True,
+        allow_null=True,
+    )
     days_since_discharge = serializers.IntegerField(read_only=True)
     
     class Meta:

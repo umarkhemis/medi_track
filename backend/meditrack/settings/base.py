@@ -182,6 +182,10 @@ try:
             'task': 'apps.checkins.tasks.send_reminders',
             'schedule': crontab(minute='*/30'),  # Every 30 minutes
         },
+        'send-followups': {
+            'task': 'apps.messaging.tasks.send_followups',
+            'schedule': crontab(minute='*/5'),  # Every 5 minutes
+        },
         'mark-missed-checkins': {
             'task': 'apps.checkins.tasks.mark_missed_checkins',
             'schedule': crontab(hour=23, minute=0),  # 11 PM daily
