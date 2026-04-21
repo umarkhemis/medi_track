@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.contrib import messages
 from .models import Patient
 
 
@@ -14,10 +15,14 @@ class PatientAdmin(admin.ModelAdmin):
     search_fields = ('user__first_name', 'user__last_name', 'user__email', 'emergency_contact_name')
     ordering = ('-current_risk_level', '-discharge_date')
     readonly_fields = ('created_at', 'updated_at', 'days_since_discharge')
+    actions = ('trigger_followups_for_selected_patients',)
     
     fieldsets = (
         ('Patient Info', {
-            'fields': ('user', 'date_of_birth', 'assigned_provider')
+            'fields': ('user', 'date_of_birth')
+        }),
+        ('Provider Assignment (Optional)', {
+            'fields': ('assigned_provider',)
         }),
         ('Medical Info', {
             'fields': (
@@ -37,3 +42,20 @@ class PatientAdmin(admin.ModelAdmin):
             'fields': ('created_at', 'updated_at', 'days_since_discharge')
         }),
     )
+
+    @admin.action(description='Trigger follow-up messages now for selected patients')
+    def trigger_followups_for_selected_patients(self, request, queryset):
+        from apps.messaging.services.followup_service import FollowUpSchedulerService
+
+        stats = FollowUpSchedulerService().send_due_followups(
+            patient_ids=list(queryset.values_list('id', flat=True)),
+            force=True,
+        )
+        self.message_user(
+            request,
+            (
+                f"Follow-up trigger complete. Attempted: {stats['attempted']}, "
+                f"sent: {stats['sent']}, failed: {stats['failed']}, skipped: {stats['skipped']}"
+            ),
+            level=messages.INFO,
+        )
