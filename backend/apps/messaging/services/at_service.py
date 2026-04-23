@@ -119,19 +119,34 @@ class AfricasTalkingService:
         Returns:
             str: Formatted message
         """
+        patient_user = getattr(patient, 'user', None)
+        first_name = getattr(patient_user, 'first_name', '') or getattr(patient, 'first_name', '')
+        last_name = getattr(patient_user, 'last_name', '') or getattr(patient, 'last_name', '')
+        patient_name = (
+            patient_user.get_full_name()
+            if patient_user and hasattr(patient_user, 'get_full_name')
+            else f'{first_name} {last_name}'.strip()
+        )
+        condition = (
+            patient.get_condition_display()
+            if hasattr(patient, 'get_condition_display')
+            else getattr(patient, 'condition', '')
+        )
+        provider_name = (
+            patient.assigned_provider.user.get_full_name()
+            if getattr(patient, 'assigned_provider', None) and patient.assigned_provider.user
+            else 'your care team'
+        )
+
         replacements = {
-            '{patient_name}': patient.user.get_full_name() or patient.user.username,
-            '{first_name}': patient.user.first_name or patient.user.username,
-            '{last_name}': patient.user.last_name or '',
-            '{condition}': patient.get_condition_display(),
+            '{patient_name}': patient_name,
+            '{first_name}': first_name,
+            '{last_name}': last_name,
+            '{condition}': condition,
             '{discharge_date}': (
                 patient.discharge_date.strftime('%B %d, %Y') if patient.discharge_date else 'N/A'
             ),
-            '{provider_name}': (
-                patient.assigned_provider.user.get_full_name()
-                if patient.assigned_provider
-                else 'your care team'
-            ),
+            '{provider_name}': provider_name,
         }
 
         message = template_content

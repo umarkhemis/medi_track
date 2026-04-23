@@ -22,7 +22,7 @@ class FollowUpSchedulerService:
         patients = Patient.objects.filter(
             monitoring_active=True,
             discharge_date__isnull=False,
-        ).select_related('user', 'assigned_provider__user')
+        ).select_related('assigned_provider__user')
         if patient_ids:
             patients = patients.filter(id__in=patient_ids)
 
@@ -49,8 +49,8 @@ class FollowUpSchedulerService:
                     continue
 
                 stats['attempted'] += 1
-                message_content = self.at_service.format_message(schedule.template.content, patient)
-                result = self.at_service.send_message(patient.user.phone_number, message_content)
+                message_content = self.at_service.format_message(schedule.template.body, patient)
+                result = self.at_service.send_message(patient.phone_number_e164, message_content)
 
                 message = Message.objects.create(
                     patient=patient,
@@ -59,9 +59,9 @@ class FollowUpSchedulerService:
                     follow_up_trigger_at=trigger_at,
                     channel='sms',
                     direction='outbound',
-                    content=message_content,
+                    body=message_content,
                     status='sent' if result.get('success') else 'failed',
-                    message_sid=result.get('sid', ''),
+                    provider_message_id=result.get('sid', ''),
                     sent_at=timezone.now() if result.get('success') else None,
                     is_automated=True,
                 )

@@ -44,6 +44,11 @@ class Message(models.Model):
         'checkins.DailyCheckIn', on_delete=models.SET_NULL,
         null=True, blank=True, related_name='messages'
     )
+    follow_up_schedule = models.ForeignKey(
+        'messaging.FollowUpSchedule', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='messages'
+    )
+    follow_up_trigger_at = models.DateTimeField(null=True, blank=True)
 
     sent_at = models.DateTimeField(null=True, blank=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
@@ -113,6 +118,29 @@ class MessageTemplate(models.Model):
 
     def __str__(self):
         return f'{self.name} ({self.template_type})'
+
+
+class FollowUpSchedule(models.Model):
+    class IntervalUnit(models.TextChoices):
+        MINUTES = 'minutes', 'Minutes'
+        HOURS = 'hours', 'Hours'
+        DAYS = 'days', 'Days'
+
+    name = models.CharField(max_length=200)
+    template = models.ForeignKey(
+        MessageTemplate, on_delete=models.CASCADE, related_name='follow_up_schedules'
+    )
+    interval_value = models.PositiveIntegerField()
+    interval_unit = models.CharField(max_length=10, choices=IntervalUnit.choices, default='days')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'follow_up_schedules'
+        ordering = ['interval_value', 'id']
+
+    def __str__(self):
+        return f'{self.name} ({self.interval_value} {self.interval_unit})'
 
 
 class FollowUpProgram(models.Model):

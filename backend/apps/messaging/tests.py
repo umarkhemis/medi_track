@@ -1,7 +1,6 @@
 from django.test import TestCase
 from datetime import date
 from unittest.mock import patch
-from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.utils import timezone
 
@@ -12,28 +11,23 @@ from apps.patients.models import Patient
 
 class FollowUpSchedulerServiceTests(TestCase):
     def setUp(self):
-        user = get_user_model().objects.create_user(
-            username='followup-patient',
-            password='testpass123',
-            role='patient',
-            phone_number='+254700000010',
+        self.patient = Patient.objects.create(
             first_name='Alice',
             last_name='Patient',
-        )
-        self.patient = Patient.objects.create(
-            user=user,
+            phone_number_raw='0700000010',
+            phone_number_e164='+254700000010',
             date_of_birth=date(1992, 2, 2),
             condition='diabetes',
             discharge_date=timezone.localdate(),
             preferred_check_in_time=(timezone.now() - timezone.timedelta(minutes=30)).time(),
-            medications=[],
+            medications='',
             emergency_contact_name='Bob',
             emergency_contact_phone='+254700000011',
         )
         self.template = MessageTemplate.objects.create(
             name='Follow-up Template',
-            template_type='follow_up',
-            content='Hi {first_name}, this is your follow-up.',
+            template_type='reminder',
+            body='Hi {first_name}, this is your follow-up.',
             is_active=True,
         )
         self.schedule = FollowUpSchedule.objects.create(
@@ -55,6 +49,7 @@ class FollowUpSchedulerServiceTests(TestCase):
         message = Message.objects.get(follow_up_schedule=self.schedule, patient=self.patient)
         self.assertEqual(message.status, 'sent')
         self.assertEqual(message.follow_up_trigger_at.date(), timezone.localdate())
+        self.assertEqual(message.provider_message_id, 'MSG123')
 
     @patch('apps.messaging.services.followup_service.AfricasTalkingService.send_message')
     def test_followup_is_not_sent_twice_for_same_patient_and_schedule(self, mock_send_message):
