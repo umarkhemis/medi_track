@@ -9,10 +9,4 @@ class Migration(migrations.Migration):
         ('messaging', '0002_rename_message_sid'),
     ]
 
-    operations = [
-        migrations.AlterField(
-            model_name='message',
-            name='message_sid',
-            field=models.CharField(blank=True, max_length=100),
-        ),
-    ]
+    operations = []

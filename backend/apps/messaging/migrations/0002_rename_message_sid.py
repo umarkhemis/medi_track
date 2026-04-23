@@ -9,10 +9,4 @@ class Migration(migrations.Migration):
         ('messaging', '0001_initial'),
     ]
 
-    operations = [
-        migrations.RenameField(
-            model_name='message',
-            old_name='twilio_sid',
-            new_name='message_sid',
-        ),
-    ]
+    operations = []
