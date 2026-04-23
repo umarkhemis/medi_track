@@ -1,50 +1,34 @@
 from rest_framework import serializers
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from django.contrib.auth import get_user_model
-
-User = get_user_model()
+from django.contrib.auth.password_validation import validate_password
+from .models import User
 
 
-class UserSerializer(serializers.ModelSerializer):
-    """Serializer for User model."""
-    
+class RegisterSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, validators=[validate_password])
+    password2 = serializers.CharField(write_only=True)
+
     class Meta:
         model = User
-        fields = (
-            'id', 'username', 'email', 'first_name', 'last_name',
-            'role', 'phone_number', 'is_verified', 'created_at', 'updated_at'
-        )
-        read_only_fields = ('id', 'created_at', 'updated_at', 'is_verified')
+        fields = ['email', 'first_name', 'last_name', 'role', 'password', 'password2']
 
-
-class UserRegistrationSerializer(serializers.ModelSerializer):
-    """Serializer for user registration."""
-    
-    password = serializers.CharField(write_only=True, min_length=8)
-    password_confirm = serializers.CharField(write_only=True, min_length=8)
-    
-    class Meta:
-        model = User
-        fields = (
-            'username', 'email', 'password', 'password_confirm',
-            'first_name', 'last_name', 'role', 'phone_number'
-        )
-    
     def validate(self, attrs):
-        if attrs['password'] != attrs['password_confirm']:
-            raise serializers.ValidationError("Passwords do not match.")
+        if attrs['password'] != attrs['password2']:
+            raise serializers.ValidationError({'password': 'Passwords do not match.'})
+        if attrs.get('role') not in [User.Role.PROVIDER, User.Role.ADMIN]:
+            raise serializers.ValidationError({'role': 'Role must be provider or admin.'})
         return attrs
-    
+
     def create(self, validated_data):
-        validated_data.pop('password_confirm')
-        user = User.objects.create_user(**validated_data)
+        validated_data.pop('password2')
+        password = validated_data.pop('password')
+        user = User(**validated_data)
+        user.set_password(password)
+        user.save()
         return user
 
 
-class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    """Custom JWT token serializer that includes user data."""
-    
-    def validate(self, attrs):
-        data = super().validate(attrs)
-        data['user'] = UserSerializer(self.user).data
-        return data
+class UserProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'email', 'first_name', 'last_name', 'role', 'date_joined']
+        read_only_fields = ['id', 'email', 'role', 'date_joined']

@@ -1,26 +1,22 @@
 from django.contrib import admin
-
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from .models import User
 
 
 @admin.register(User)
-class UserAdmin(admin.ModelAdmin):
-    """Admin interface for User model."""
-    
-    list_display = ('username', 'email', 'role', 'phone_number', 'is_verified', 'is_active', 'created_at')
-    list_filter = ('role', 'is_verified', 'is_active')
-    search_fields = ('username', 'email', 'phone_number', 'first_name', 'last_name')
-    ordering = ('-created_at',)
-    readonly_fields = ('created_at', 'updated_at')
-    
+class UserAdmin(BaseUserAdmin):
+    list_display = ['email', 'first_name', 'last_name', 'role', 'is_active', 'date_joined']
+    list_filter = ['role', 'is_active']
+    search_fields = ['email', 'first_name', 'last_name']
+    ordering = ['-date_joined']
     fieldsets = (
-        ('User Info', {
-            'fields': ('username', 'email', 'first_name', 'last_name', 'phone_number')
-        }),
-        ('Permissions', {
-            'fields': ('role', 'is_verified', 'is_active', 'is_staff', 'is_superuser')
-        }),
-        ('Important dates', {
-            'fields': ('created_at', 'updated_at', 'last_login')
+        (None, {'fields': ('email', 'password')}),
+        ('Personal Info', {'fields': ('first_name', 'last_name')}),
+        ('Permissions', {'fields': ('role', 'is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+    )
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': ('email', 'first_name', 'last_name', 'role', 'password1', 'password2'),
         }),
     )

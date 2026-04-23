@@ -1,79 +1,69 @@
-from rest_framework.views import APIView
+import datetime
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from django.utils import timezone
-from django.db.models import Count, Avg
+from rest_framework.views import APIView
+from apps.patients.permissions import IsProviderOrAdmin
+from apps.patients.models import Patient
+from apps.checkins.models import DailyCheckIn
+from apps.alerts.models import Alert
 
 
-class AnalyticsSummaryView(APIView):
-    """System-wide analytics summary for admins / providers."""
-
-    permission_classes = [IsAuthenticated]
+class SummaryView(APIView):
+    permission_classes = [IsProviderOrAdmin]
 
     def get(self, request):
-        from apps.patients.models import Patient
-        from apps.alerts.models import Alert
-        from apps.checkins.models import DailyCheckIn
-        from apps.messaging.models import Message
+        user = request.user
+        today = datetime.date.today()
 
-        today = timezone.now().date()
+        if user.role == 'admin':
+            patients = Patient.objects.all()
+            checkins = DailyCheckIn.objects.all()
+            alerts = Alert.objects.all()
+        else:
+            try:
+                provider = user.provider_profile
+            except Exception:
+                return Response({'error': 'Provider profile not found'}, status=404)
+            patients = Patient.objects.filter(assigned_provider=provider)
+            checkins = DailyCheckIn.objects.filter(patient__assigned_provider=provider)
+            alerts = Alert.objects.filter(patient__assigned_provider=provider)
 
-        # --- Patient risk distribution ---
-        patients = Patient.objects.filter(monitoring_active=True)
-        total_patients = patients.count()
-        risk_distribution = {
-            'high': patients.filter(current_risk_level='red').count(),
-            'moderate': patients.filter(current_risk_level='yellow').count(),
-            'low': patients.filter(current_risk_level='green').count(),
-        }
-
-        # --- Condition breakdown ---
-        condition_counts = list(
-            patients.values('condition').annotate(count=Count('id')).order_by('-count')
-        )
-
-        # --- Check-in completion rate (last 7 days) ---
-        seven_days_ago = today - timezone.timedelta(days=7)
-        week_checkins = DailyCheckIn.objects.filter(scheduled_date__gte=seven_days_ago)
-        total_week = week_checkins.count()
-        completed_week = week_checkins.filter(status='completed').count()
-        missed_week = week_checkins.filter(status='missed').count()
-        checkin_rate = round(completed_week / total_week * 100, 1) if total_week > 0 else 0
-
-        # --- Alerts ---
-        active_alerts = Alert.objects.filter(status='active').count()
-        alerts_today = Alert.objects.filter(created_at__date=today).count()
-        alert_type_counts = {
-            'red': Alert.objects.filter(status='active', alert_type='red').count(),
-            'yellow': Alert.objects.filter(status='active', alert_type='yellow').count(),
-        }
-
-        # --- Message stats (last 7 days) ---
-        week_messages = Message.objects.filter(created_at__date__gte=seven_days_ago)
-        message_stats = {
-            'total': week_messages.count(),
-            'sent': week_messages.filter(direction='outbound').count(),
-            'received': week_messages.filter(direction='inbound').count(),
-            'delivered': week_messages.filter(status='delivered').count(),
-            'failed': week_messages.filter(status='failed').count(),
-        }
+        today_checkins = checkins.filter(scheduled_date=today)
+        last_7_days = today - datetime.timedelta(days=7)
 
         return Response({
-            'total_patients': total_patients,
-            'risk_distribution': risk_distribution,
-            'condition_breakdown': condition_counts,
-            'checkin_stats': {
-                'period_days': 7,
-                'total': total_week,
-                'completed': completed_week,
-                'missed': missed_week,
-                'completion_rate': checkin_rate,
+            'patients': {
+                'total': patients.count(),
+                'active': patients.filter(monitoring_active=True).count(),
+                'opted_out': patients.filter(status=Patient.Status.OPTED_OUT).count(),
+                'high_risk': patients.filter(current_risk_level=Patient.RiskLevel.RED).count(),
+                'yellow_risk': patients.filter(current_risk_level=Patient.RiskLevel.YELLOW).count(),
+                'green_risk': patients.filter(current_risk_level=Patient.RiskLevel.GREEN).count(),
             },
-            'alert_stats': {
-                'active': active_alerts,
-                'today': alerts_today,
-                'by_type': alert_type_counts,
+            'checkins_today': {
+                'total': today_checkins.count(),
+                'completed': today_checkins.filter(status=DailyCheckIn.Status.COMPLETED).count(),
+                'missed': today_checkins.filter(status=DailyCheckIn.Status.MISSED).count(),
+                'pending': today_checkins.filter(
+                    status__in=[DailyCheckIn.Status.SCHEDULED, DailyCheckIn.Status.SENT,
+                                DailyCheckIn.Status.REMINDED]
+                ).count(),
             },
-            'message_stats': message_stats,
+            'checkins_last_7_days': {
+                'total': checkins.filter(scheduled_date__gte=last_7_days).count(),
+                'completed': checkins.filter(
+                    scheduled_date__gte=last_7_days, status=DailyCheckIn.Status.COMPLETED
+                ).count(),
+                'missed': checkins.filter(
+                    scheduled_date__gte=last_7_days, status=DailyCheckIn.Status.MISSED
+                ).count(),
+            },
+            'alerts': {
+                'total_open': alerts.filter(status=Alert.Status.OPEN).count(),
+                'red_open': alerts.filter(status=Alert.Status.OPEN, severity=Alert.Severity.RED).count(),
+                'yellow_open': alerts.filter(status=Alert.Status.OPEN, severity=Alert.Severity.YELLOW).count(),
+                'resolved_last_7_days': alerts.filter(
+                    status=Alert.Status.RESOLVED,
+                    resolved_at__date__gte=last_7_days,
+                ).count(),
+            },
         })
-

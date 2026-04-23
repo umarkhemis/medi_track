@@ -1,234 +1,181 @@
-from rest_framework import viewsets, filters, status
-from rest_framework.decorators import action
+import hashlib
+import hmac
+import logging
+from django.conf import settings
+from django.utils import timezone
+from rest_framework import generics, status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import AllowAny
-from django_filters.rest_framework import DjangoFilterBackend
-from django.utils import timezone
 
-from .models import MessageTemplate, Message
-from .serializers import MessageTemplateSerializer, MessageSerializer
-from .services.at_service import AfricasTalkingService
+from apps.patients.models import Patient
+from apps.patients.permissions import IsProviderOrAdmin
+from .models import Message, MessageTemplate, FollowUpProgram, PatientProgramEnrollment
+from .serializers import (
+    MessageSerializer, SendMessageSerializer,
+    MessageTemplateSerializer, FollowUpProgramSerializer,
+    PatientProgramEnrollmentSerializer,
+)
+from .services.africastalking_service import AfricasTalkingService
+from .inbound_processor import process_inbound_sms
 
-
-class MessageTemplateViewSet(viewsets.ModelViewSet):
-    """ViewSet for MessageTemplate model."""
-
-    queryset = MessageTemplate.objects.all()
-    serializer_class = MessageTemplateSerializer
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_fields = ['template_type', 'condition', 'is_active']
-    ordering_fields = ['created_at', 'template_type']
+logger = logging.getLogger(__name__)
 
 
-class MessageViewSet(viewsets.ModelViewSet):
-    """ViewSet for Message model."""
-
-    queryset = Message.objects.select_related('patient__user', 'provider__user').all()
+class MessageListView(generics.ListAPIView):
     serializer_class = MessageSerializer
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_fields = ['patient', 'provider', 'channel', 'direction', 'status']
-    ordering_fields = ['created_at', 'sent_at']
+    permission_classes = [IsProviderOrAdmin]
 
-    def create(self, request, *args, **kwargs):
-        """
-        Create a message record and, for outbound messages, actually send via AT.
-        Accepts: patient (id), content, channel, direction, is_automated.
-        """
-        direction = request.data.get('direction', 'outbound')
-
-        if direction == 'outbound':
-            from apps.patients.models import Patient
-
-            patient_id = request.data.get('patient')
-            content = request.data.get('content', '').strip()
-            channel = request.data.get('channel', 'sms')
-
-            if not patient_id or not content:
-                return Response(
-                    {'error': 'patient and content are required'},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
+    def get_queryset(self):
+        user = self.request.user
+        qs = Message.objects.select_related('patient', 'provider')
+        if user.role == 'provider':
             try:
-                patient = Patient.objects.select_related('user').get(id=patient_id)
-            except Patient.DoesNotExist:
-                return Response({'error': 'Patient not found'}, status=status.HTTP_404_NOT_FOUND)
+                qs = qs.filter(patient__assigned_provider=user.provider_profile)
+            except Exception:
+                qs = qs.none()
+        return qs
 
-            at_service = AfricasTalkingService()
-            result = at_service.send_message(patient.user.phone_number, content, channel=channel)
 
-            message = Message.objects.create(
-                patient=patient,
-                provider=getattr(request.user, 'provider_profile', None),
-                channel=channel,
-                direction='outbound',
-                content=content,
-                status='sent' if result.get('success') else 'failed',
-                message_sid=result.get('sid', ''),
-                sent_at=timezone.now() if result.get('success') else None,
-                is_automated=request.data.get('is_automated', False),
-            )
+class SendMessageView(APIView):
+    permission_classes = [IsProviderOrAdmin]
 
-            serializer = self.get_serializer(message)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+    def post(self, request):
+        serializer = SendMessageSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        # Inbound messages: save as-is (no external sending needed)
-        return super().create(request, *args, **kwargs)
+        patient_id = serializer.validated_data['patient_id']
+        body = serializer.validated_data['body']
 
-    @action(detail=False, methods=['post'])
-    def send(self, request):
-        """
-        Dedicated send endpoint (accepts patient_id instead of patient).
-        Kept for backward compatibility with any direct API callers.
-        """
-        from apps.patients.models import Patient
-
-        patient_id = request.data.get('patient_id')
-        content = request.data.get('content', '').strip()
-        channel = request.data.get('channel', 'sms')
-
-        if not patient_id or not content:
-            return Response(
-                {'error': 'patient_id and content are required'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
+        # Check patient access
         try:
-            patient = Patient.objects.select_related('user').get(id=patient_id)
+            patient = Patient.objects.get(pk=patient_id)
         except Patient.DoesNotExist:
             return Response({'error': 'Patient not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        at_service = AfricasTalkingService()
-        result = at_service.send_message(patient.user.phone_number, content, channel=channel)
+        user = request.user
+        if user.role == 'provider':
+            try:
+                if patient.assigned_provider != user.provider_profile:
+                    return Response({'error': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
+            except Exception:
+                return Response({'error': 'Access denied'}, status=status.HTTP_403_FORBIDDEN)
 
-        message = Message.objects.create(
+        if not patient.sms_opt_in:
+            return Response({'error': 'Patient has opted out of SMS'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Create message record
+        provider = getattr(user, 'provider_profile', None)
+        msg = Message.objects.create(
             patient=patient,
-            provider=getattr(request.user, 'provider_profile', None),
-            channel=channel,
-            direction='outbound',
-            content=content,
-            status='sent' if result.get('success') else 'failed',
-            message_sid=result.get('sid', ''),
-            sent_at=timezone.now() if result.get('success') else None,
+            provider=provider,
+            direction=Message.Direction.OUTBOUND,
+            status=Message.Status.PENDING,
+            body=body,
             is_automated=False,
+            to_number=patient.phone_number_e164,
         )
 
-        serializer = self.get_serializer(message)
-        response_data = serializer.data
-        response_data['at_result'] = result
-        return Response(response_data, status=status.HTTP_201_CREATED)
+        # Send via Africa's Talking
+        result = AfricasTalkingService.send_sms(patient.phone_number_e164, body)
+
+        msg.provider_message_id = result.get('message_id') or ''
+        if result['status'] == 'sent':
+            msg.status = Message.Status.SENT
+            msg.sent_at = timezone.now()
+        else:
+            msg.status = Message.Status.FAILED
+            msg.error_message = result.get('error') or ''
+            msg.failed_at = timezone.now()
+        msg.save()
+
+        return Response(MessageSerializer(msg).data, status=status.HTTP_201_CREATED)
 
 
-class AfricasTalkingWebhookView(APIView):
-    """
-    Handle incoming SMS messages delivered by Africa's Talking.
+class MessageTemplateListView(generics.ListCreateAPIView):
+    queryset = MessageTemplate.objects.filter(is_active=True)
+    serializer_class = MessageTemplateSerializer
+    permission_classes = [IsProviderOrAdmin]
 
-    AT posts to this endpoint with the following fields:
-        from    – sender's phone number (e.g. +254XXXXXXXXX)
-        to      – your registered short code / long number
-        text    – the message body
-        date    – ISO-8601 timestamp
-        id      – unique AT message ID
-        linkId  – (optional) premium-content link ID
-    """
 
+class TwilioWebhookView(APIView):
+    """Kept for legacy compatibility - redirects to Africa's Talking handler."""
     permission_classes = [AllowAny]
 
     def post(self, request):
-        from apps.patients.models import Patient
-        from apps.checkins.models import DailyCheckIn, CheckInResponse
-        from apps.checkins.services.risk_assessment import RiskAssessmentService
-        from django.contrib.auth import get_user_model
+        return Response({'detail': 'Use /webhook/africastalking/ instead.'}, status=status.HTTP_410_GONE)
 
-        from_number = request.data.get('from', '').strip()
-        body = request.data.get('text', '').strip()
-        message_id = request.data.get('id', '')
+
+class AfricasTalkingInboundView(APIView):
+    """
+    Webhook endpoint for Africa's Talking inbound SMS.
+    AT posts: from, to, text, id, date, etc.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        data = request.data
+        from_number = data.get('from') or data.get('phoneNumber') or ''
+        to_number = data.get('to') or ''
+        body = data.get('text') or data.get('body') or ''
 
         if not from_number or not body:
-            return Response({'status': 'ignored', 'reason': 'missing fields'})
+            return Response({'error': 'Missing required fields'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Normalise to E.164 — AT may omit the leading '+'
-        if from_number and not from_number.startswith('+'):
-            from_number = f'+{from_number}'
-
-        # Find patient by phone number
-        User = get_user_model()
-        try:
-            user = User.objects.get(phone_number=from_number)
-            patient = user.patient_profile
-        except (User.DoesNotExist, AttributeError):
-            return Response({'status': 'unknown_sender'})
-
-        # Record the inbound message
-        Message.objects.create(
-            patient=patient,
-            channel='sms',
-            direction='inbound',
-            content=body,
-            status='delivered',
-            message_sid=message_id,
-            delivered_at=timezone.now(),
+        result = process_inbound_sms(
+            from_number=from_number,
+            to_number=to_number,
+            body=body,
+            raw_payload=dict(data),
         )
+        return Response(result, status=status.HTTP_200_OK)
 
-        # Find today's active check-in for this patient
-        today = timezone.now().date()
-        checkin = DailyCheckIn.objects.filter(
-            patient=patient,
-            scheduled_date=today,
-            status__in=['sent', 'in_progress'],
-        ).first()
 
-        if not checkin:
-            return Response({'status': 'received', 'processed': False})
+class AfricasTalkingDeliveryView(APIView):
+    """
+    Webhook endpoint for Africa's Talking delivery reports.
+    """
+    permission_classes = [AllowAny]
 
-        checkin.status = 'in_progress'
-        checkin.save()
+    def post(self, request):
+        data = request.data
+        msg_id = data.get('id') or ''
+        delivery_status = data.get('status') or ''
 
-        # Parse space-separated numeric/word responses, e.g. "4 6 3"
-        tokens = body.split()
-        risk_service = RiskAssessmentService()
+        if msg_id:
+            msg = Message.objects.filter(provider_message_id=msg_id).first()
+            if msg:
+                from .models import DeliveryReceipt
+                DeliveryReceipt.objects.create(
+                    message=msg,
+                    provider_message_id=msg_id,
+                    status=delivery_status,
+                    raw_payload=dict(data),
+                )
+                if delivery_status.lower() == 'delivered':
+                    msg.status = Message.Status.DELIVERED
+                    msg.delivered_at = timezone.now()
+                    msg.save(update_fields=['status', 'delivered_at'])
+                elif delivery_status.lower() in ('failed', 'rejected'):
+                    msg.status = Message.Status.FAILED
+                    msg.external_status = delivery_status
+                    msg.failed_at = timezone.now()
+                    msg.save(update_fields=['status', 'external_status', 'failed_at'])
 
-        # Use stored question_keys when available; fall back to generic keys
-        question_keys = checkin.question_keys or []
+        return Response({'status': 'ok'})
 
-        for idx, token in enumerate(tokens):
-            if idx < len(question_keys):
-                key = question_keys[idx]
-            else:
-                key = f'question_{idx + 1}'
 
-            # Derive human-readable text from the key
-            question_text = key.replace('_', ' ').title()
+class FollowUpProgramListView(generics.ListCreateAPIView):
+    queryset = FollowUpProgram.objects.filter(is_active=True)
+    serializer_class = FollowUpProgramSerializer
+    permission_classes = [IsProviderOrAdmin]
 
-            parsed_value, score = risk_service.parse_response_value(token, key)
 
-            # Update existing response for this key if it already exists
-            CheckInResponse.objects.update_or_create(
-                checkin=checkin,
-                question_key=key,
-                defaults={
-                    'question_text': question_text,
-                    'response_value': parsed_value,
-                    'response_score': score,
-                },
-            )
+class PatientProgramEnrollmentListView(generics.ListAPIView):
+    serializer_class = PatientProgramEnrollmentSerializer
+    permission_classes = [IsProviderOrAdmin]
 
-        # Determine how many responses are expected.
-        # Prefer the stored question_keys length; if not set we cannot reliably
-        # know the expected count so we skip auto-processing until a template-driven
-        # check-in has been sent that populates question_keys.
-        if not question_keys:
-            # No question_keys stored — this check-in was not created via the
-            # scheduler or predates the feature; process once any responses arrive
-            # but only if the patient submitted at least one token.
-            if tokens:
-                risk_service.process_checkin(checkin)
-        else:
-            received_count = checkin.responses.count()
-            expected_count = len(question_keys)
-            if received_count >= expected_count:
-                risk_service.process_checkin(checkin)
-
-        return Response({'status': 'received', 'processed': True})
-
+    def get_queryset(self):
+        return PatientProgramEnrollment.objects.select_related('patient', 'program')

@@ -1,90 +1,152 @@
-from rest_framework import viewsets, filters, status
+from rest_framework import generics, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django_filters.rest_framework import DjangoFilterBackend
-from django.utils import timezone
-from django.db.models import Case, When, Value, IntegerField
-from datetime import timedelta
-
+from rest_framework.viewsets import ModelViewSet
+from django.db.models import Q
 from .models import Patient
 from .serializers import PatientSerializer, PatientListSerializer
-
-# Annotation that orders patients by risk priority: red(2) > yellow(1) > green(0)
-RISK_ORDER = Case(
-    When(current_risk_level='red', then=Value(2)),
-    When(current_risk_level='yellow', then=Value(1)),
-    When(current_risk_level='green', then=Value(0)),
-    default=Value(0),
-    output_field=IntegerField(),
-)
+from .permissions import IsProviderOrAdmin, CanAccessPatient
+from apps.messaging.models import FollowUpProgram, PatientProgramEnrollment
+from rest_framework import serializers as drf_serializers
 
 
-class PatientViewSet(viewsets.ModelViewSet):
-    """ViewSet for Patient model."""
-
-    queryset = Patient.objects.select_related('user', 'assigned_provider__user').annotate(
-        risk_order=RISK_ORDER
-    ).order_by('-risk_order', '-created_at')
-    serializer_class = PatientSerializer
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['condition', 'current_risk_level', 'monitoring_active', 'assigned_provider']
-    search_fields = ['user__first_name', 'user__last_name', 'user__email']
-    ordering_fields = ['discharge_date', 'current_risk_level', 'created_at']
+class PatientViewSet(ModelViewSet):
+    permission_classes = [IsProviderOrAdmin]
 
     def get_serializer_class(self):
         if self.action == 'list':
             return PatientListSerializer
         return PatientSerializer
 
+    def get_queryset(self):
+        user = self.request.user
+        qs = Patient.objects.select_related('assigned_provider__user')
+
+        if user.role == 'admin':
+            pass  # all patients
+        elif user.role == 'provider':
+            try:
+                qs = qs.filter(assigned_provider=user.provider_profile)
+            except Exception:
+                qs = qs.none()
+
+        # Filters
+        risk = self.request.query_params.get('risk_level')
+        status_filter = self.request.query_params.get('status')
+        search = self.request.query_params.get('search')
+
+        if risk:
+            qs = qs.filter(current_risk_level=risk)
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        if search:
+            qs = qs.filter(
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search) |
+                Q(phone_number_e164__icontains=search) |
+                Q(condition__icontains=search)
+            )
+        return qs
+
+    def get_object(self):
+        obj = super().get_object()
+        self.check_object_permissions(self.request, obj)
+        return obj
+
+    def check_object_permissions(self, request, obj):
+        super().check_object_permissions(request, obj)
+        perm = CanAccessPatient()
+        if not perm.has_object_permission(request, self, obj):
+            self.permission_denied(request)
+
     @action(detail=False, methods=['get'])
     def high_risk(self, request):
-        """Get all high-risk patients."""
-        patients = self.get_queryset().filter(current_risk_level='red')
-        serializer = self.get_serializer(patients, many=True)
+        qs = self.get_queryset().filter(current_risk_level=Patient.RiskLevel.RED)
+        serializer = PatientListSerializer(qs, many=True)
         return Response(serializer.data)
 
-    @action(detail=False, methods=['get'])
-    def pending_response(self, request):
-        """Get patients who haven't responded today."""
-        from apps.checkins.models import DailyCheckIn
+    @action(detail=True, methods=['post'])
+    def pause_monitoring(self, request, pk=None):
+        patient = self.get_object()
+        patient.pause_monitoring()
+        return Response({'status': 'monitoring paused'})
 
-        today = timezone.now().date()
-        patients_with_pending = Patient.objects.filter(
-            monitoring_active=True,
-            checkins__scheduled_date=today,
-            checkins__status__in=['scheduled', 'sent']
-        ).distinct()
+    @action(detail=True, methods=['post'])
+    def resume_monitoring(self, request, pk=None):
+        patient = self.get_object()
+        patient.resume_monitoring()
+        return Response({'status': 'monitoring resumed'})
 
-        serializer = self.get_serializer(patients_with_pending, many=True)
-        return Response(serializer.data)
+    @action(detail=True, methods=['post'])
+    def opt_out(self, request, pk=None):
+        patient = self.get_object()
+        patient.opt_out()
+        return Response({'status': 'patient opted out'})
+
+    @action(detail=True, methods=['post'])
+    def mark_unreachable(self, request, pk=None):
+        patient = self.get_object()
+        patient.mark_unreachable()
+        return Response({'status': 'patient marked unreachable'})
+
+    @action(detail=True, methods=['post'])
+    def enroll(self, request, pk=None):
+        patient = self.get_object()
+        program_id = request.data.get('program_id')
+        if not program_id:
+            return Response({'error': 'program_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            program = FollowUpProgram.objects.get(pk=program_id)
+        except FollowUpProgram.DoesNotExist:
+            return Response({'error': 'Program not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Deactivate previous enrollment
+        PatientProgramEnrollment.objects.filter(patient=patient, is_active=True).update(is_active=False)
+
+        import datetime
+        end_date = (
+            datetime.date.today() + datetime.timedelta(days=program.duration_days)
+            if program.duration_days else None
+        )
+        enrollment = PatientProgramEnrollment.objects.create(
+            patient=patient,
+            program=program,
+            enrolled_by=request.user,
+            end_date=end_date,
+        )
+        if end_date:
+            patient.follow_up_end_date = end_date
+            patient.save(update_fields=['follow_up_end_date'])
+
+        return Response({
+            'status': 'enrolled',
+            'program': program.name,
+            'end_date': end_date,
+        }, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['get'])
     def checkins(self, request, pk=None):
-        """Get patient's check-in history."""
-        from apps.checkins.serializers import DailyCheckInSerializer
-
         patient = self.get_object()
-        checkins = patient.checkins.all()[:30]  # Last 30 check-ins
-        serializer = DailyCheckInSerializer(checkins, many=True)
+        from apps.checkins.models import DailyCheckIn
+        from apps.checkins.serializers import DailyCheckInSerializer
+        qs = DailyCheckIn.objects.filter(patient=patient).order_by('-scheduled_date')
+        serializer = DailyCheckInSerializer(qs, many=True)
         return Response(serializer.data)
 
     @action(detail=True, methods=['get'])
     def alerts(self, request, pk=None):
-        """Get patient's alert history."""
-        from apps.alerts.serializers import AlertSerializer
-
         patient = self.get_object()
-        alerts = patient.alerts.all()[:50]  # Last 50 alerts
-        serializer = AlertSerializer(alerts, many=True)
+        from apps.alerts.models import Alert
+        from apps.alerts.serializers import AlertSerializer
+        qs = Alert.objects.filter(patient=patient).order_by('-created_at')
+        serializer = AlertSerializer(qs, many=True)
         return Response(serializer.data)
 
     @action(detail=True, methods=['get'])
     def messages(self, request, pk=None):
-        """Get patient's message history."""
-        from apps.messaging.serializers import MessageSerializer
-
         patient = self.get_object()
-        messages = patient.messages.all()[:100]  # Last 100 messages
-        serializer = MessageSerializer(messages, many=True)
+        from apps.messaging.models import Message
+        from apps.messaging.serializers import MessageSerializer
+        qs = Message.objects.filter(patient=patient).order_by('-created_at')
+        serializer = MessageSerializer(qs, many=True)
         return Response(serializer.data)
-

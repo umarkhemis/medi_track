@@ -1,28 +1,29 @@
 from rest_framework import serializers
 from .models import Provider
+from apps.users.serializers import UserProfileSerializer
 
 
 class ProviderSerializer(serializers.ModelSerializer):
-    """Serializer for Provider model."""
-    
-    user_email = serializers.EmailField(source='user.email', read_only=True)
-    user_name = serializers.CharField(source='user.get_full_name', read_only=True)
-    current_patient_count = serializers.IntegerField(read_only=True)
-    
+    user = UserProfileSerializer(read_only=True)
+    patient_count = serializers.IntegerField(read_only=True)
+    full_name = serializers.CharField(read_only=True)
+
     class Meta:
         model = Provider
-        fields = '__all__'
-        read_only_fields = ('created_at', 'updated_at', 'current_patient_count')
+        fields = [
+            'id', 'user', 'full_name', 'specialization', 'facility_name',
+            'department', 'timezone', 'is_active', 'is_available',
+            'max_patients', 'patient_count', 'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']
 
 
 class ProviderDashboardSerializer(serializers.Serializer):
-    """Serializer for provider dashboard summary data."""
-    
     total_patients = serializers.IntegerField()
+    active_patients = serializers.IntegerField()
     high_risk_patients = serializers.IntegerField()
-    moderate_risk_patients = serializers.IntegerField()
-    low_risk_patients = serializers.IntegerField()
-    active_alerts = serializers.IntegerField()
-    pending_checkins = serializers.IntegerField()
-    checkin_response_rate = serializers.FloatField()
-    pending_followups = serializers.IntegerField()
+    yellow_risk_patients = serializers.IntegerField()
+    pending_alerts = serializers.IntegerField()
+    todays_checkins = serializers.IntegerField()
+    completed_checkins_today = serializers.IntegerField()
+    missed_checkins_today = serializers.IntegerField()

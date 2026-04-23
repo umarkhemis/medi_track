@@ -1,34 +1,34 @@
 from rest_framework import serializers
-from .models import Alert
+from .models import Alert, EscalationTask
+
+
+class EscalationTaskSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EscalationTask
+        fields = [
+            'id', 'alert', 'patient', 'assigned_to', 'status',
+            'instructions', 'action_taken', 'due_by', 'completed_at', 'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']
 
 
 class AlertSerializer(serializers.ModelSerializer):
-    """Serializer for Alert model."""
-    
-    patient_name = serializers.CharField(source='patient.user.get_full_name', read_only=True)
-    acknowledged_by_name = serializers.CharField(
-        source='acknowledged_by.user.get_full_name',
-        read_only=True
-    )
-    resolved_by_name = serializers.CharField(
-        source='resolved_by.user.get_full_name',
-        read_only=True
-    )
-    
+    patient_name = serializers.SerializerMethodField()
+    escalation_tasks = EscalationTaskSerializer(many=True, read_only=True)
+
     class Meta:
         model = Alert
-        fields = '__all__'
-        read_only_fields = ('created_at', 'updated_at', 'acknowledged_at', 'resolved_at')
+        fields = [
+            'id', 'patient', 'patient_name', 'checkin', 'severity', 'status',
+            'title', 'description', 'triggered_by',
+            'assigned_to', 'acknowledged_by', 'acknowledged_at',
+            'resolved_by', 'resolved_at', 'resolution_notes',
+            'escalation_tasks', 'created_at', 'updated_at',
+        ]
+        read_only_fields = [
+            'id', 'severity', 'triggered_by',
+            'acknowledged_at', 'resolved_at', 'created_at', 'updated_at',
+        ]
 
-
-class AlertListSerializer(serializers.ModelSerializer):
-    """Lightweight serializer for alert lists."""
-    
-    patient_name = serializers.CharField(source='patient.user.get_full_name', read_only=True)
-    
-    class Meta:
-        model = Alert
-        fields = (
-            'id', 'patient', 'patient_name', 'alert_type',
-            'status', 'risk_score', 'trigger_reason', 'created_at'
-        )
+    def get_patient_name(self, obj):
+        return obj.patient.get_full_name()

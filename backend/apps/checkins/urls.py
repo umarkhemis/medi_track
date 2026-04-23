@@ -1,11 +1,9 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import DailyCheckInViewSet
+from .views import CheckInViewSet
 
 router = DefaultRouter()
-router.register(r'', DailyCheckInViewSet, basename='checkin')
-
-app_name = 'checkins'
+router.register('', CheckInViewSet, basename='checkin')
 
 urlpatterns = [
     path('', include(router.urls)),

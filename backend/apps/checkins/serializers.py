@@ -3,34 +3,38 @@ from .models import DailyCheckIn, CheckInResponse
 
 
 class CheckInResponseSerializer(serializers.ModelSerializer):
-    """Serializer for CheckInResponse model."""
-    
     class Meta:
         model = CheckInResponse
-        fields = '__all__'
-        read_only_fields = ('responded_at',)
+        fields = ['id', 'question_key', 'response_value', 'raw_response_text', 'received_at']
+        read_only_fields = ['id', 'received_at']
 
 
 class DailyCheckInSerializer(serializers.ModelSerializer):
-    """Serializer for DailyCheckIn model."""
-    
-    patient_name = serializers.CharField(source='patient.user.get_full_name', read_only=True)
     responses = CheckInResponseSerializer(many=True, read_only=True)
-    
+    patient_name = serializers.SerializerMethodField()
+
     class Meta:
         model = DailyCheckIn
-        fields = '__all__'
-        read_only_fields = ('created_at', 'sent_at', 'completed_at')
+        fields = [
+            'id', 'patient', 'patient_name', 'scheduled_date', 'scheduled_time',
+            'status', 'question_keys', 'response_data',
+            'sent_time', 'expiration_time', 'completed_time', 'missed_time',
+            'attempt_count', 'reminder_count', 'last_attempt_time',
+            'provider_message_id', 'correlation_id',
+            'responses', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_patient_name(self, obj):
+        return obj.patient.get_full_name()
 
 
 class DailyCheckInListSerializer(serializers.ModelSerializer):
-    """Lightweight serializer for check-in lists."""
-    
-    patient_name = serializers.CharField(source='patient.user.get_full_name', read_only=True)
-    
+    patient_name = serializers.SerializerMethodField()
+
     class Meta:
         model = DailyCheckIn
-        fields = (
-            'id', 'patient', 'patient_name', 'scheduled_date',
-            'scheduled_time', 'status', 'risk_score', 'risk_level'
-        )
+        fields = ['id', 'patient', 'patient_name', 'scheduled_date', 'status', 'attempt_count', 'reminder_count']
+
+    def get_patient_name(self, obj):
+        return obj.patient.get_full_name()

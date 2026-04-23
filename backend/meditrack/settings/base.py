@@ -1,22 +1,11 @@
-"""
-Base settings for meditrack project.
-Common settings shared across all environments.
-"""
-
-import os
 from pathlib import Path
-from dotenv import load_dotenv
+from decouple import config
+from datetime import timedelta
 
-# Load environment variables
-load_dotenv()
-
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-change-this-in-production')
+SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-me-in-production')
 
-# Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -24,14 +13,14 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
-    # Third-party apps
+
+    # Third party
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
-    'django_filters',
     'drf_spectacular',
-    
+    'django_celery_beat',
+
     # Local apps
     'apps.users',
     'apps.patients',
@@ -58,7 +47,7 @@ ROOT_URLCONF = 'meditrack.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],
+        'DIRS': [],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -73,124 +62,89 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'meditrack.wsgi.application'
 
-# Password validation
+AUTH_USER_MODEL = 'users.User'
+
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
-# Internationalization
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-# Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_DIRS = [BASE_DIR / 'static']
-
-# Media files
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-# Custom User Model
-AUTH_USER_MODEL = 'users.User'
-
-# Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# REST Framework settings
+# REST Framework
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
+    'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ],
-    'DEFAULT_PERMISSION_CLASSES': [
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
-    ],
-    'DEFAULT_FILTER_BACKENDS': [
-        'django_filters.rest_framework.DjangoFilterBackend',
-        'rest_framework.filters.SearchFilter',
-        'rest_framework.filters.OrderingFilter',
-    ],
+    ),
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
-    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
-# JWT Settings
-from datetime import timedelta
-
+# JWT
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=8),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
-    'ALGORITHM': 'HS256',
-    'SIGNING_KEY': SECRET_KEY,
     'AUTH_HEADER_TYPES': ('Bearer',),
-    'USER_ID_FIELD': 'id',
-    'USER_ID_CLAIM': 'user_id',
-    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
 }
 
-# Spectacular settings (API Documentation)
+# Spectacular (API docs)
 SPECTACULAR_SETTINGS = {
     'TITLE': 'MediTrack API',
-    'DESCRIPTION': 'Post-Discharge Patient Monitoring Platform API',
-    'VERSION': '1.0.0',
-    'SERVE_INCLUDE_SCHEMA': False,
+    'DESCRIPTION': 'Post-Discharge Patient Monitoring Platform',
+    'VERSION': '2.0.0',
 }
 
-# Africa's Talking settings
-AT_USERNAME = os.environ.get('AT_USERNAME', 'sandbox')
-AT_API_KEY = os.environ.get('AT_API_KEY', '')
-AT_SENDER_ID = os.environ.get('AT_SENDER_ID', '')
+# Celery
+CELERY_TIMEZONE = 'UTC'
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60
 
-# Celery settings
-CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = TIME_ZONE
+# Africa's Talking
+AT_USERNAME = config('AT_USERNAME', default='sandbox')
+AT_API_KEY = config('AT_API_KEY', default='')
+AT_SMS_SENDER_ID = config('AT_SMS_SENDER_ID', default=None)
+AT_INBOUND_SECRET = config('AT_INBOUND_SECRET', default='')
+AT_DELIVERY_SECRET = config('AT_DELIVERY_SECRET', default='')
 
-# Celery Beat Schedule (conditionally imported)
-try:
-    from celery.schedules import crontab
-    
-    CELERY_BEAT_SCHEDULE = {
-        'create-daily-checkins': {
-            'task': 'apps.checkins.tasks.schedule_daily_checkins',
-            'schedule': crontab(hour=0, minute=0),  # Midnight daily
-        },
-        'send-scheduled-checkins': {
-            'task': 'apps.checkins.tasks.send_scheduled_checkins',
-            'schedule': crontab(minute='*/5'),  # Every 5 minutes
-        },
-        'send-checkin-reminders': {
-            'task': 'apps.checkins.tasks.send_reminders',
-            'schedule': crontab(minute='*/30'),  # Every 30 minutes
-        },
-        'send-followups': {
-            'task': 'apps.messaging.tasks.send_followups',
-            'schedule': crontab(minute='*/5'),  # Every 5 minutes
-        },
-        'mark-missed-checkins': {
-            'task': 'apps.checkins.tasks.mark_missed_checkins',
-            'schedule': crontab(hour=23, minute=0),  # 11 PM daily
-        },
-    }
-except ImportError:
-    # Celery not installed, skip beat schedule
-    CELERY_BEAT_SCHEDULE = {}
+# Phone
+DEFAULT_COUNTRY_CODE = config('DEFAULT_COUNTRY_CODE', default='KE')
+
+# Celery Beat Schedule
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    'create-daily-checkins': {
+        'task': 'apps.checkins.tasks.create_daily_checkins',
+        'schedule': crontab(hour=0, minute=5),
+    },
+    'send-due-checkins': {
+        'task': 'apps.checkins.tasks.send_due_checkins',
+        'schedule': crontab(minute='*/15'),
+    },
+    'send-checkin-reminders': {
+        'task': 'apps.checkins.tasks.send_checkin_reminders',
+        'schedule': crontab(minute='*/30'),
+    },
+    'mark-missed-checkins': {
+        'task': 'apps.checkins.tasks.mark_missed_checkins',
+        'schedule': crontab(hour=23, minute=30),
+    },
+}

@@ -3,34 +3,27 @@ from .models import DailyCheckIn, CheckInResponse
 
 
 class CheckInResponseInline(admin.TabularInline):
-    """Inline admin for CheckInResponse."""
     model = CheckInResponse
     extra = 0
-    readonly_fields = ('responded_at',)
+    readonly_fields = ['received_at']
 
 
 @admin.register(DailyCheckIn)
 class DailyCheckInAdmin(admin.ModelAdmin):
-    """Admin interface for DailyCheckIn model."""
-    
-    list_display = (
-        'patient', 'scheduled_date', 'scheduled_time', 'status',
-        'risk_score', 'risk_level', 'completed_at'
-    )
-    list_filter = ('status', 'risk_level', 'scheduled_date')
-    search_fields = ('patient__user__first_name', 'patient__user__last_name')
-    ordering = ('-scheduled_date', '-scheduled_time')
-    readonly_fields = ('created_at', 'sent_at', 'completed_at')
+    list_display = [
+        'patient', 'scheduled_date', 'status',
+        'attempt_count', 'reminder_count', 'sent_time', 'completed_time',
+    ]
+    list_filter = ['status', 'scheduled_date']
+    search_fields = ['patient__first_name', 'patient__last_name', 'patient__phone_number_e164']
+    readonly_fields = ['created_at', 'updated_at', 'sent_time', 'completed_time', 'missed_time']
+    ordering = ['-scheduled_date']
     inlines = [CheckInResponseInline]
-    
-    fieldsets = (
-        ('Check-in Info', {
-            'fields': ('patient', 'scheduled_date', 'scheduled_time', 'status')
-        }),
-        ('Risk Assessment', {
-            'fields': ('risk_score', 'risk_level', 'notes')
-        }),
-        ('Timestamps', {
-            'fields': ('created_at', 'sent_at', 'completed_at')
-        }),
-    )
+
+
+@admin.register(CheckInResponse)
+class CheckInResponseAdmin(admin.ModelAdmin):
+    list_display = ['patient', 'question_key', 'response_value', 'received_at']
+    list_filter = ['question_key', 'response_value']
+    search_fields = ['patient__first_name', 'patient__last_name']
+    readonly_fields = ['received_at']

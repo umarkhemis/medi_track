@@ -4,28 +4,15 @@ from .models import Provider
 
 @admin.register(Provider)
 class ProviderAdmin(admin.ModelAdmin):
-    """Admin interface for Provider model."""
-    
-    list_display = (
-        'user', 'employee_id', 'department', 'specialization',
-        'is_available', 'current_patient_count', 'max_patients'
-    )
-    list_filter = ('department', 'is_available')
-    search_fields = ('user__first_name', 'user__last_name', 'employee_id', 'license_number')
-    ordering = ('-created_at',)
-    readonly_fields = ('created_at', 'updated_at', 'current_patient_count')
-    
-    fieldsets = (
-        ('Provider Info', {
-            'fields': ('user', 'employee_id', 'license_number')
-        }),
-        ('Department & Specialization', {
-            'fields': ('department', 'specialization')
-        }),
-        ('Availability', {
-            'fields': ('is_available', 'max_patients', 'current_patient_count')
-        }),
-        ('Timestamps', {
-            'fields': ('created_at', 'updated_at')
-        }),
-    )
+    list_display = ['full_name', 'facility_name', 'department', 'specialization', 'is_active', 'is_available', 'patient_count']
+    list_filter = ['is_active', 'is_available', 'facility_name']
+    search_fields = ['user__first_name', 'user__last_name', 'user__email', 'facility_name', 'department']
+    readonly_fields = ['created_at', 'updated_at']
+
+    def full_name(self, obj):
+        return obj.user.get_full_name()
+    full_name.short_description = 'Name'
+
+    def patient_count(self, obj):
+        return obj.patient_count
+    patient_count.short_description = 'Active Patients'

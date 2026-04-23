@@ -1,72 +1,51 @@
 from django.contrib import admin
-from django.contrib import messages
-
-from .models import MessageTemplate, Message, FollowUpSchedule
-
-
-@admin.register(MessageTemplate)
-class MessageTemplateAdmin(admin.ModelAdmin):
-    """Admin interface for MessageTemplate model."""
-    
-    list_display = ('name', 'template_type', 'condition', 'is_active', 'created_at')
-    list_filter = ('template_type', 'condition', 'is_active')
-    search_fields = ('name', 'content')
-    ordering = ('-created_at',)
-    readonly_fields = ('created_at',)
+from .models import (
+    Message, DeliveryReceipt, InboundWebhookEvent,
+    MessageTemplate, FollowUpProgram, PatientProgramEnrollment,
+)
 
 
 @admin.register(Message)
 class MessageAdmin(admin.ModelAdmin):
-    """Admin interface for Message model."""
-    
-    list_display = (
-        'patient', 'channel', 'direction', 'status',
-        'follow_up_schedule', 'is_automated', 'created_at', 'sent_at'
-    )
-    list_filter = (
-        'channel',
-        'direction',
-        'status',
-        'is_automated',
-        'follow_up_schedule',
-        'created_at',
-    )
-    search_fields = ('patient__user__first_name', 'patient__user__last_name', 'content')
-    ordering = ('-created_at',)
-    readonly_fields = ('created_at', 'sent_at', 'delivered_at', 'read_at', 'message_sid')
+    list_display = ['patient', 'direction', 'status', 'is_automated', 'channel', 'created_at']
+    list_filter = ['direction', 'status', 'channel', 'is_automated']
+    search_fields = ['patient__first_name', 'patient__last_name', 'patient__phone_number_e164', 'body']
+    readonly_fields = ['created_at', 'sent_at', 'delivered_at', 'received_at', 'failed_at']
+    ordering = ['-created_at']
 
 
-@admin.register(FollowUpSchedule)
-class FollowUpScheduleAdmin(admin.ModelAdmin):
-    """Admin interface for follow-up scheduling."""
+@admin.register(DeliveryReceipt)
+class DeliveryReceiptAdmin(admin.ModelAdmin):
+    list_display = ['provider_message_id', 'status', 'received_at']
+    list_filter = ['status']
+    readonly_fields = ['received_at']
 
-    list_display = (
-        'name',
-        'interval_value',
-        'interval_unit',
-        'template',
-        'is_active',
-        'updated_at',
-    )
-    list_filter = ('interval_unit', 'is_active', 'template')
-    search_fields = ('name', 'template__name')
-    ordering = ('interval_value', 'name')
-    readonly_fields = ('created_at', 'updated_at')
-    actions = ('trigger_selected_followups_now',)
 
-    @admin.action(description='Trigger selected follow-up schedules now')
-    def trigger_selected_followups_now(self, request, queryset):
-        from apps.messaging.services.followup_service import FollowUpSchedulerService
+@admin.register(InboundWebhookEvent)
+class InboundWebhookEventAdmin(admin.ModelAdmin):
+    list_display = ['from_number', 'body', 'processed', 'received_at']
+    list_filter = ['processed']
+    search_fields = ['from_number', 'body']
+    readonly_fields = ['received_at']
 
-        stats = FollowUpSchedulerService().send_due_followups(
-            schedule_ids=list(queryset.values_list('id', flat=True)),
-            force=True,
-        )
-        self.message_user(
-            request,
-            (
-                f"Follow-up trigger complete. Attempted: {stats['attempted']}, "
-                f"sent: {stats['sent']}, failed: {stats['failed']}, skipped: {stats['skipped']}"
-            ),
-            level=messages.INFO,
-        )
+
+@admin.register(MessageTemplate)
+class MessageTemplateAdmin(admin.ModelAdmin):
+    list_display = ['name', 'template_type', 'condition', 'language', 'is_active']
+    list_filter = ['template_type', 'is_active', 'language']
+    search_fields = ['name', 'condition', 'body']
+
+
+@admin.register(FollowUpProgram)
+class FollowUpProgramAdmin(admin.ModelAdmin):
+    list_display = ['name', 'condition', 'duration_days', 'is_active']
+    list_filter = ['is_active']
+    search_fields = ['name', 'condition']
+
+
+@admin.register(PatientProgramEnrollment)
+class PatientProgramEnrollmentAdmin(admin.ModelAdmin):
+    list_display = ['patient', 'program', 'enrolled_at', 'end_date', 'is_active']
+    list_filter = ['is_active', 'program']
+    search_fields = ['patient__first_name', 'patient__last_name']
+    readonly_fields = ['enrolled_at']
