@@ -4,12 +4,13 @@ from .models import Message, MessageTemplate, FollowUpProgram, PatientProgramEnr
 
 class MessageSerializer(serializers.ModelSerializer):
     patient_name = serializers.SerializerMethodField()
+    content = serializers.CharField(source='body', read_only=True)
 
     class Meta:
         model = Message
         fields = [
             'id', 'patient', 'patient_name', 'provider', 'channel',
-            'direction', 'status', 'body', 'is_automated',
+            'direction', 'status', 'body', 'content', 'is_automated',
             'to_number', 'from_number', 'provider_message_id',
             'external_status', 'error_code', 'error_message',
             'checkin', 'sent_at', 'delivered_at', 'received_at',

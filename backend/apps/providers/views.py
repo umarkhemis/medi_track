@@ -22,6 +22,58 @@ class ProviderViewSet(ReadOnlyModelViewSet):
         # Providers can only see themselves
         return Provider.objects.filter(user=user).select_related('user')
 
+    @action(detail=False, methods=['get'])
+    def me(self, request):
+        """Return the provider profile of the currently authenticated user."""
+        try:
+            provider = Provider.objects.select_related('user').get(user=request.user)
+        except Provider.DoesNotExist:
+            return Response({'error': 'Provider profile not found'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = ProviderSerializer(provider)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def my_dashboard(self, request):
+        """Return dashboard summary for the currently authenticated provider or admin."""
+        user = request.user
+        today = datetime.date.today()
+
+        if user.role == 'admin':
+            patients = Patient.objects.all()
+            checkins_today = DailyCheckIn.objects.filter(scheduled_date=today)
+            pending_alerts = Alert.objects.filter(status=Alert.Status.OPEN)
+        else:
+            try:
+                provider = user.provider_profile
+            except Exception:
+                return Response({'error': 'Provider profile not found'}, status=status.HTTP_404_NOT_FOUND)
+            patients = Patient.objects.filter(assigned_provider=provider)
+            checkins_today = DailyCheckIn.objects.filter(
+                patient__assigned_provider=provider, scheduled_date=today
+            )
+            pending_alerts = Alert.objects.filter(
+                patient__assigned_provider=provider, status=Alert.Status.OPEN
+            )
+
+        data = {
+            'total_patients': patients.count(),
+            'active_patients': patients.filter(monitoring_active=True).count(),
+            'high_risk_patients': patients.filter(current_risk_level=Patient.RiskLevel.RED).count(),
+            'moderate_risk_patients': patients.filter(current_risk_level=Patient.RiskLevel.YELLOW).count(),
+            'low_risk_patients': patients.filter(current_risk_level=Patient.RiskLevel.GREEN).count(),
+            'pending_alerts': pending_alerts.count(),
+            'active_alerts': pending_alerts.count(),
+            'todays_checkins': checkins_today.count(),
+            'completed_checkins_today': checkins_today.filter(status=DailyCheckIn.Status.COMPLETED).count(),
+            'missed_checkins_today': checkins_today.filter(status=DailyCheckIn.Status.MISSED).count(),
+            'pending_checkins': checkins_today.filter(
+                status__in=[DailyCheckIn.Status.SCHEDULED, DailyCheckIn.Status.SENT]
+            ).count(),
+            'pending_followups': 0,
+            'checkin_response_rate': 0,
+        }
+        return Response(data)
+
     @action(detail=True, methods=['get'])
     def dashboard(self, request, pk=None):
         provider = self.get_object()

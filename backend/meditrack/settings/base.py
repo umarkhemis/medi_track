@@ -124,6 +124,12 @@ AT_SMS_SENDER_ID = config('AT_SMS_SENDER_ID', default=None)
 AT_INBOUND_SECRET = config('AT_INBOUND_SECRET', default='')
 AT_DELIVERY_SECRET = config('AT_DELIVERY_SECRET', default='')
 
+# Twilio (optional — when set, real SMS is sent immediately)
+TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID', default='')
+TWILIO_AUTH_TOKEN = config('TWILIO_AUTH_TOKEN', default='')
+TWILIO_PHONE_NUMBER = config('TWILIO_PHONE_NUMBER', default='')
+TWILIO_WHATSAPP_NUMBER = config('TWILIO_WHATSAPP_NUMBER', default='')
+
 # Phone
 DEFAULT_COUNTRY_CODE = config('DEFAULT_COUNTRY_CODE', default='KE')
 

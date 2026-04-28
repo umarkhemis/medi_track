@@ -98,9 +98,9 @@ const PatientDetailPage = () => {
     );
   }
 
-  const fullName = patient.user
-    ? `${patient.user.first_name || ''} ${patient.user.last_name || ''}`.trim()
-    : patient.user_name || `Patient #${id}`;
+  const fullName = patient.full_name
+    || `${patient.first_name || ''} ${patient.last_name || ''}`.trim()
+    || `Patient #${id}`;
 
   const tabs = [
     { key: 'overview', label: 'Overview' },
@@ -141,9 +141,9 @@ const PatientDetailPage = () => {
               </div>
               <p className="text-gray-600 mt-1">{formatCondition(patient.condition)}</p>
               <div className="flex flex-wrap gap-4 mt-3 text-sm text-gray-500">
-                {patient.user?.phone_number && (
+                {patient.phone_number_e164 && (
                   <span className="flex items-center gap-1">
-                    <Phone className="w-4 h-4" /> {patient.user.phone_number}
+                    <Phone className="w-4 h-4" /> {patient.phone_number_e164}
                   </span>
                 )}
                 <span className="flex items-center gap-1">

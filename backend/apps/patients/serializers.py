@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Patient
 from apps.messaging.utils.phone import normalize_to_e164
+import datetime
 
 
 class PatientSerializer(serializers.ModelSerializer):
@@ -71,6 +72,11 @@ class PatientSerializer(serializers.ModelSerializer):
 class PatientListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for list views."""
     full_name = serializers.SerializerMethodField()
+    days_since_discharge = serializers.SerializerMethodField()
+    provider_name = serializers.SerializerMethodField()
+    follow_up_date = serializers.DateField(source='follow_up_end_date', read_only=True)
+    last_checkin_status = serializers.SerializerMethodField()
+    last_checkin_time = serializers.SerializerMethodField()
 
     class Meta:
         model = Patient
@@ -78,7 +84,31 @@ class PatientListSerializer(serializers.ModelSerializer):
             'id', 'full_name', 'phone_number_e164',
             'condition', 'current_risk_level', 'status',
             'monitoring_active', 'discharge_date', 'assigned_provider',
+            'days_since_discharge', 'provider_name', 'follow_up_date',
+            'last_checkin_status', 'last_checkin_time',
         ]
 
     def get_full_name(self, obj):
         return obj.get_full_name()
+
+    def get_days_since_discharge(self, obj):
+        if obj.discharge_date:
+            return (datetime.date.today() - obj.discharge_date).days
+        return None
+
+    def get_provider_name(self, obj):
+        if obj.assigned_provider:
+            return obj.assigned_provider.user.get_full_name()
+        return None
+
+    def get_last_checkin_status(self, obj):
+        checkin = obj.checkins.order_by('-scheduled_date').first()
+        if checkin:
+            return checkin.status
+        return None
+
+    def get_last_checkin_time(self, obj):
+        checkin = obj.checkins.order_by('-scheduled_date').first()
+        if checkin and checkin.completed_time:
+            return checkin.completed_time
+        return None
