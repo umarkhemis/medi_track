@@ -71,14 +71,28 @@ class PatientSerializer(serializers.ModelSerializer):
 class PatientListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for list views."""
     full_name = serializers.SerializerMethodField()
+    assigned_provider_name = serializers.SerializerMethodField()
+    days_since_discharge = serializers.SerializerMethodField()
 
     class Meta:
         model = Patient
         fields = [
             'id', 'full_name', 'phone_number_e164',
             'condition', 'current_risk_level', 'status',
-            'monitoring_active', 'discharge_date', 'assigned_provider',
+            'monitoring_active', 'discharge_date', 'follow_up_end_date',
+            'assigned_provider', 'assigned_provider_name', 'days_since_discharge',
         ]
 
     def get_full_name(self, obj):
         return obj.get_full_name()
+
+    def get_assigned_provider_name(self, obj):
+        if obj.assigned_provider:
+            return obj.assigned_provider.user.get_full_name()
+        return None
+
+    def get_days_since_discharge(self, obj):
+        if obj.discharge_date:
+            from datetime import date
+            return (date.today() - obj.discharge_date).days
+        return None

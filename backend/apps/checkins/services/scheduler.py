@@ -117,7 +117,7 @@ class CheckInScheduler:
         # Prefer exact condition match over 'all'; break ties by newest first.
         from django.db.models import Case, When, Value, IntegerField as _IntField
         template = MessageTemplate.objects.filter(
-            template_type='daily_checkin',
+            template_type='checkin',
             is_active=True,
         ).filter(
             Q(condition=patient.condition) | Q(condition='all')
@@ -133,35 +133,36 @@ class CheckInScheduler:
             return {'success': False, 'error': 'No active check-in template found'}
 
         # Format message body
-        message_content = self.at_service.format_message(template.content, patient)
+        message_content = self.at_service.format_message(template.body, patient)
 
-        # Append numbered questions if present
-        if template.questions:
-            message_content += "\n\n" + _build_question_lines(template.questions)
+        # Append numbered questions if present (field may not exist on all template types)
+        questions = getattr(template, 'questions', None)
+        if questions:
+            message_content += "\n\n" + _build_question_lines(questions)
 
         # Derive and store question keys so the webhook can map responses correctly
-        question_keys = _extract_question_keys(template.questions)
+        question_keys = _extract_question_keys(questions or [])
         checkin.question_keys = question_keys
         checkin.save(update_fields=['question_keys'])
 
-        result = self.at_service.send_message(patient.user.phone_number, message_content)
+        result = self.at_service.send_message(patient.phone_number_e164, message_content)
 
         if result.get('success') or result.get('mock'):
-            checkin.status = 'sent'
-            checkin.sent_at = timezone.now()
-            checkin.save(update_fields=['status', 'sent_at'])
+            checkin.status = DailyCheckIn.Status.SENT
+            checkin.sent_time = timezone.now()
+            checkin.save(update_fields=['status', 'sent_time'])
 
             Message.objects.create(
                 patient=patient,
                 provider=patient.assigned_provider,
                 channel='sms',
                 direction='outbound',
-                content=message_content,
+                body=message_content,
                 status='sent' if result.get('success') else 'pending',
-                message_sid=result.get('sid', ''),
+                provider_message_id=result.get('sid', ''),
                 sent_at=timezone.now(),
                 is_automated=True,
-                related_checkin=checkin,
+                checkin=checkin,
             )
 
             return {'success': True, 'checkin_id': checkin.id, 'message_sid': result.get('sid')}
@@ -221,7 +222,7 @@ class CheckInScheduler:
         else:
             message_content = self.at_service.format_message(template.content, patient)
 
-        result = self.at_service.send_message(patient.user.phone_number, message_content)
+        result = self.at_service.send_message(patient.phone_number_e164, message_content)
 
         if result.get('success') or result.get('mock'):
             Message.objects.create(
@@ -229,12 +230,12 @@ class CheckInScheduler:
                 provider=patient.assigned_provider,
                 channel='sms',
                 direction='outbound',
-                content=message_content,
+                body=message_content,
                 status='sent' if result.get('success') else 'pending',
-                message_sid=result.get('sid', ''),
+                provider_message_id=result.get('sid', ''),
                 sent_at=timezone.now(),
                 is_automated=True,
-                related_checkin=checkin,
+                checkin=checkin,
             )
             return {'success': True}
 
@@ -251,8 +252,11 @@ class CheckInScheduler:
 
         count = DailyCheckIn.objects.filter(
             scheduled_date=yesterday,
-            status__in=['scheduled', 'sent', 'in_progress'],
-        ).update(status='missed')
+            status__in=[
+                DailyCheckIn.Status.SCHEDULED,
+                DailyCheckIn.Status.SENT,
+                DailyCheckIn.Status.REMINDED,
+            ],
+        ).update(status=DailyCheckIn.Status.MISSED)
 
         return count
-
