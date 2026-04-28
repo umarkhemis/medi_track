@@ -79,7 +79,7 @@ const PatientsPage = () => {
       : '?';
 
   const filteredPatients = patients.filter((patient) => {
-    const name = patient.user_name || '';
+    const name = patient.full_name || '';
     return name.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
@@ -183,12 +183,12 @@ const PatientsPage = () => {
                         <div className="flex items-center">
                           <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center">
                             <span className="text-primary-600 font-semibold text-sm">
-                              {getInitials(patient.user_name)}
+                              {getInitials(patient.full_name)}
                             </span>
                           </div>
                           <div className="ml-4">
                             <div className="text-sm font-medium text-gray-900">
-                              {patient.user_name || '—'}
+                              {patient.full_name || '—'}
                             </div>
                           </div>
                         </div>
@@ -211,10 +211,10 @@ const PatientsPage = () => {
                           : '—'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {formatFollowUp(patient.follow_up_date)}
+                        {formatFollowUp(patient.follow_up_end_date)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {patient.provider_name || '—'}
+                        {patient.assigned_provider_name || '—'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <Link
