@@ -3,7 +3,7 @@ from .views import (
     MessageListView, SendMessageView, MessageTemplateListView,
     AfricasTalkingInboundView, AfricasTalkingDeliveryView,
     FollowUpProgramListView, PatientProgramEnrollmentListView,
-    TwilioWebhookView,
+    TwilioWebhookView, SimulatorView,
 )
 
 urlpatterns = [
@@ -12,6 +12,7 @@ urlpatterns = [
     path('templates/', MessageTemplateListView.as_view(), name='message-templates'),
     path('programs/', FollowUpProgramListView.as_view(), name='followup-programs'),
     path('enrollments/', PatientProgramEnrollmentListView.as_view(), name='program-enrollments'),
+    path('simulator/', SimulatorView.as_view(), name='sms-simulator'),
 
     # Webhooks
     path('webhook/africastalking/', AfricasTalkingInboundView.as_view(), name='at-inbound'),

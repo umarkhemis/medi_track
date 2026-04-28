@@ -75,7 +75,7 @@ const MessagesPage = () => {
         const formatted = messageService.formatTemplate(template, patient);
         setMessageContent(formatted);
       } else if (template) {
-        setMessageContent(template.content);
+        setMessageContent(template.body || template.content || '');
       }
     }
   };
@@ -254,7 +254,7 @@ const MessagesPage = () => {
                     <option value="">Select a patient...</option>
                     {patients.map(patient => (
                       <option key={patient.id} value={patient.id}>
-                        {patient.user?.first_name} {patient.user?.last_name}
+                        {patient.full_name || `${patient.first_name || ''} ${patient.last_name || ''}`.trim()}
                       </option>
                     ))}
                   </select>

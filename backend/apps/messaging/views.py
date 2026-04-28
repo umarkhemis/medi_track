@@ -167,6 +167,69 @@ class AfricasTalkingDeliveryView(APIView):
         return Response({'status': 'ok'})
 
 
+class SimulatorView(APIView):
+    """
+    SMS/WhatsApp Simulator endpoint.
+    GET  /messages/simulator/?phone=+256...  — list simulated messages for a phone
+    POST /messages/simulator/               — simulate sending a check-in request
+    """
+    permission_classes = [IsProviderOrAdmin]
+
+    def get(self, request):
+        from .simulator import get_simulated_messages
+        phone = request.query_params.get('phone')
+        messages = get_simulated_messages(phone_number=phone, limit=50)
+        return Response({'messages': messages, 'count': len(messages)})
+
+    def post(self, request):
+        from .simulator import simulate_send, build_sms_preview, build_whatsapp_preview
+        patient_id = request.data.get('patient_id')
+        channel = request.data.get('channel', 'sms')
+        custom_body = request.data.get('body')
+
+        if not patient_id:
+            return Response({'error': 'patient_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            patient = Patient.objects.get(pk=patient_id)
+        except Patient.DoesNotExist:
+            return Response({'error': 'Patient not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not custom_body:
+            from apps.checkins.scheduler import get_checkin_message
+            body = get_checkin_message(patient)
+        else:
+            body = custom_body
+
+        result = simulate_send(to=patient.phone_number_e164, body=body, channel=channel)
+
+        # Store the message in DB too
+        Message.objects.create(
+            patient=patient,
+            direction=Message.Direction.OUTBOUND,
+            status=Message.Status.SENT,
+            body=body,
+            is_automated=True,
+            to_number=patient.phone_number_e164,
+            provider_message_id=result.get('message_id', ''),
+            sent_at=timezone.now(),
+        )
+
+        if channel == 'whatsapp':
+            preview = build_whatsapp_preview(patient.get_full_name(), body)
+        else:
+            preview = build_sms_preview(patient.get_full_name(), body)
+
+        return Response({
+            'sent': True,
+            'channel': channel,
+            'patient': patient.get_full_name(),
+            'phone': patient.phone_number_e164,
+            'preview': preview,
+            'message_id': result.get('message_id'),
+        }, status=status.HTTP_201_CREATED)
+
+
 class FollowUpProgramListView(generics.ListCreateAPIView):
     queryset = FollowUpProgram.objects.filter(is_active=True)
     serializer_class = FollowUpProgramSerializer

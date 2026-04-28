@@ -14,19 +14,21 @@ class EscalationTaskSerializer(serializers.ModelSerializer):
 
 class AlertSerializer(serializers.ModelSerializer):
     patient_name = serializers.SerializerMethodField()
+    alert_type = serializers.CharField(source='severity', read_only=True)
+    trigger_reason = serializers.CharField(source='description', read_only=True)
     escalation_tasks = EscalationTaskSerializer(many=True, read_only=True)
 
     class Meta:
         model = Alert
         fields = [
-            'id', 'patient', 'patient_name', 'checkin', 'severity', 'status',
-            'title', 'description', 'triggered_by',
+            'id', 'patient', 'patient_name', 'checkin', 'severity', 'alert_type',
+            'status', 'title', 'description', 'trigger_reason', 'triggered_by',
             'assigned_to', 'acknowledged_by', 'acknowledged_at',
             'resolved_by', 'resolved_at', 'resolution_notes',
             'escalation_tasks', 'created_at', 'updated_at',
         ]
         read_only_fields = [
-            'id', 'severity', 'triggered_by',
+            'id', 'severity', 'alert_type', 'trigger_reason', 'triggered_by',
             'acknowledged_at', 'resolved_at', 'created_at', 'updated_at',
         ]
 

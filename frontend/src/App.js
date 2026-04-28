@@ -10,9 +10,11 @@ import RegisterPage from './pages/auth/RegisterPage';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import PatientsPage from './pages/patients/PatientsPage';
 import PatientDetailPage from './pages/patients/PatientDetailPage';
+import AddPatient from './pages/patients/AddPatient';
 import AlertsPage from './pages/alerts/AlertsPage';
 import MessagesPage from './pages/messages/MessagesPage';
 import SettingsPage from './pages/settings/SettingsPage';
+import CheckInForm from './pages/CheckInForm';
 
 // Create a client
 const queryClient = new QueryClient();
@@ -39,8 +41,12 @@ function App() {
         <AuthProvider>
           <Toaster position="top-right" />
           <Routes>
+            {/* Public routes */}
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/checkin" element={<CheckInForm />} />
+
+            {/* Protected routes */}
             <Route
               path="/dashboard"
               element={
@@ -54,6 +60,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <PatientsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/patients/add"
+              element={
+                <ProtectedRoute>
+                  <AddPatient />
                 </ProtectedRoute>
               }
             />

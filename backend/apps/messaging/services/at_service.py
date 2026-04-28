@@ -50,7 +50,8 @@ class AfricasTalkingService:
                 'success': True,
                 'mock': True,
                 'sid': 'MOCK_ID',
-                'status': 'mock',
+                'status': 'sent',
+                'message_id': 'MOCK_ID',
             }
 
         try:

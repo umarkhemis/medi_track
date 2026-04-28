@@ -1,14 +1,16 @@
 import api from './api';
 
 export const authService = {
-  login: async (username, password) => {
-    const response = await api.post('/auth/login/', { username, password });
+  login: async (email, password) => {
+    const response = await api.post('/auth/login/', { email, password });
     const { access, refresh, user } = response.data;
     
     // Store tokens and user data
     localStorage.setItem('accessToken', access);
     localStorage.setItem('refreshToken', refresh);
-    localStorage.setItem('user', JSON.stringify(user));
+    if (user) {
+      localStorage.setItem('user', JSON.stringify(user));
+    }
     
     return response.data;
   },

@@ -93,12 +93,12 @@ const messageService = {
    * Format message with template and patient data
    */
   formatTemplate: (template, patientData) => {
-    let content = template.content;
+    let content = template.body || template.content || '';
     
     if (patientData) {
-      content = content.replace('{patient_name}', patientData.user?.first_name || 'Patient');
-      content = content.replace('{first_name}', patientData.user?.first_name || '');
-      content = content.replace('{last_name}', patientData.user?.last_name || '');
+      content = content.replace('{patient_name}', patientData.full_name || 'Patient');
+      content = content.replace('{first_name}', patientData.first_name || '');
+      content = content.replace('{last_name}', patientData.last_name || '');
     }
     
     return content;
